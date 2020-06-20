@@ -1,3 +1,3 @@
-from .DMP import DMPs
-from .DMP_Discrete import DMP_Discrete
-from .DMP_Rhythmic import DMP_Rhythmic
+from .dmp import DMPs
+from .dmp_discrete import DMPs_discrete
+from .dmp_rhythmic import DMPs_rhythmic

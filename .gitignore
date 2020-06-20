@@ -1,9 +1,16 @@
+# Check any matching of *.pyc and *.pyo
 *.py[co]
+
+# The default file used in Mac book
 .DS_Store
+
 _build
 build
-dist
-*.egg-info
-*~
-*.bak
-*.swp
+
+#*.npz
+
+#dist
+#*.egg-info
+#*~
+#*.bak
+#*.swp

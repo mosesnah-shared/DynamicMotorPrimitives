@@ -14,218 +14,203 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
+import numpy as np
 
-import numpy             as np
-import matplotlib.pyplot as plt
-import scipy.interpolate
-
-
-from .CanonicalSystem import CanonicalSystem
+from pydmps.cs import CanonicalSystem
 
 
-class DMPs( object ):
-    """
-        Implementation of Dynamic Motor Primitives, as described in Dr. Stefan Schaal's (2002) paper.
-    """
+class DMPs(object):
+    """Implementation of Dynamic Motor Primitives,
+    as described in Dr. Stefan Schaal's (2002) paper."""
 
-    def __init__( self, nDMPs, nBFs, dt = 0.01, y0 = 0, goal = 1, w = None, ay = None, by = None, **kwargs ):
+    def __init__(
+        self, n_dmps, n_bfs, dt=0.01, y0=0, goal=1, w=None, ay=None, by=None, **kwargs
+    ):
         """
-            Default values from Schaal (2012)
-
-            [INPUT]
-                [VAR NAME]    [TYPE]     [DESCRIPTION]
-                (1) nDMPs     int      Number of dynamic motor primitives
-                (2) nBFs      int      Number of basis functions per DMP
-                (3) dt         float    Timestep for simulation
-                (4) y0         list     Initial state of DMPs
-                (5) goal       list     Goal state of DMPs
-                (6) w          list     Tunable parameters, control amplitude of basis functions
-                (7) ay         int      Gain on attractor term y dynamics
-                (8) by         int      Gain on attractor term y dynamics
+        n_dmps int: number of dynamic motor primitives
+        n_bfs int: number of basis functions per DMP
+        dt float: timestep for simulation
+        y0 list: initial state of DMPs
+        goal list: goal state of DMPs
+        w list: tunable parameters, control amplitude of basis functions
+        ay int: gain on attractor term y dynamics
+        by int: gain on attractor term y dynamics
         """
 
-
-        self.nDMPs = nDMPs
-        self.nBFs  = nBFs
-        self.dt    = dt
-        if isinstance( y0, (int, float) ):
-            y0 = np.ones( self.nDMPs ) * y0
-
+        self.n_dmps = n_dmps
+        self.n_bfs = n_bfs
+        self.dt = dt
+        if isinstance(y0, (int, float)):
+            y0 = np.ones(self.n_dmps) * y0
         self.y0 = y0
-
-        if isinstance( goal, (int, float) ):
-            goal = np.ones( self.nDMPs ) * goal
-
+        if isinstance(goal, (int, float)):
+            goal = np.ones(self.n_dmps) * goal
         self.goal = goal
-
         if w is None:
             # default is f = 0
-            w = np.zeros( ( self.nDMPs, self.nBFs ) )
+            w = np.zeros((self.n_dmps, self.n_bfs))
+        self.w = w
 
-        self.w  = w
-        self.ay = np.ones( nDMPs ) * 25.0 if ay is None else ay                 # Schaal 2012
-        self.by = self.ay / 4.0           if by is None else by                 # Schaal 2012
+        self.ay = np.ones(n_dmps) * 25.0 if ay is None else ay  # Schaal 2012
+        self.by = self.ay / 4.0 if by is None else by  # Schaal 2012
 
         # set up the CS
-        self.cs = CanonicalSystem( dt = self.dt, **kwargs )
-        self.timesteps = int( self.cs.runTime / self.dt )
+        self.cs = CanonicalSystem(dt=self.dt, **kwargs)
+        self.timesteps = int(self.cs.run_time / self.dt)
 
         # set up the DMP system
-        self.resetState()
+        self.reset_state()
 
-    def checkOffset( self ):
-        """
-            Check to see if initial position and goal are the same
-            if they are, offset slightly so that the forcing term is not 0
-        """
+    def check_offset(self):
+        """Check to see if initial position and goal are the same
+        if they are, offset slightly so that the forcing term is not 0"""
 
-        for d in range( self.nDMPs ):
-            if abs( self.y0[ d ] - self.goal[ d ] ) < 1e-4:
-                self.goal[ d ] += 1e-4
+        for d in range(self.n_dmps):
+            if abs(self.y0[d] - self.goal[d]) < 1e-4:
+                self.goal[d] += 1e-4
 
-    def genFrontTerm( self, x, dmpNum ):
-        raise NotImplementedError( )
+    def gen_front_term(self, x, dmp_num):
+        raise NotImplementedError()
 
-    def genGoal( self, yDesired ):
-        raise NotImplementedError( )
+    def gen_goal(self, y_des):
+        raise NotImplementedError()
 
-    def genPsi(self):
-        raise NotImplementedError( )
+    def gen_psi(self):
+        raise NotImplementedError()
 
-    def genWeights( self, fTarget ):
-        raise NotImplementedError( )
+    def gen_weights(self, f_target):
+        raise NotImplementedError()
 
-    def imitatePath(self, yDesired, isPlot = False):
-        """
-            Takes in a desired trajectory and generates the set of system parameters that best realize this path.
+    def imitate_path(self, y_des, plot=False):
+        """Takes in a desired trajectory and generates the set of
+        system parameters that best realize this path.
 
-            [INPUT]
-                [VAR NAME]    [TYPE]        [DESCRIPTION]
-                yDesired      list/array    The desired trajectories of each DMP should be shaped [nDMPs, runTime]
+        y_des list/array: the desired trajectories of each DMP
+                          should be shaped [n_dmps, run_time]
         """
 
         # set initial state and goal
-        if yDesired.ndim == 1:
-            yDesired = yDesired.reshape( 1, len( yDesired ) )
-        self.y0       = yDesired[ :, 0 ].copy( )
-        self.yDesired = yDesired.copy()
-        self.goal     = self.genGoal( yDesired )
+        if y_des.ndim == 1:
+            y_des = y_des.reshape(1, len(y_des))
+        self.y0 = y_des[:, 0].copy()
+        self.y_des = y_des.copy()
+        self.goal = self.gen_goal(y_des)
 
-        # self.checkOffset()
+        # self.check_offset()
 
+        # generate function to interpolate the desired trajectory
+        import scipy.interpolate
 
-        path = np.zeros( ( self.nDMPs, self.timesteps ) )
-        x    = np.linspace( 0, self.cs.runTime, yDesired.shape[ 1 ] )
+        path = np.zeros((self.n_dmps, self.timesteps))
+        x = np.linspace(0, self.cs.run_time, y_des.shape[1])
+        for d in range(self.n_dmps):
+            path_gen = scipy.interpolate.interp1d(x, y_des[d])
+            for t in range(self.timesteps):
+                path[d, t] = path_gen(t * self.dt)
+        y_des = path
 
-        for d in range( self.nDMPs ):
-            path_gen = scipy.interpolate.interp1d( x, yDesired[ d ] )
-            for t in range( self.timesteps ):
-                path[ d, t ] = path_gen(t * self.dt)
+        # calculate velocity of y_des with central differences
+        dy_des = np.gradient(y_des, axis=1) / self.dt
 
-        yDesired   = path
-        dyDesired  = np.gradient(  yDesired, axis = 1) / self.dt                # Calculate velocity of yDesired with central differences
-        ddyDesired = np.gradient( dyDesired, axis = 1) / self.dt                # Calculate acceleration of yDesired with central differences
+        # calculate acceleration of y_des with central differences
+        ddy_des = np.gradient(dy_des, axis=1) / self.dt
 
-        fTarget    = np.zeros( ( yDesired.shape[ 1 ], self.nDMPs ) )
-
+        f_target = np.zeros((y_des.shape[1], self.n_dmps))
         # find the force required to move along this trajectory
-        for d in range(self.nDMPs):
-            fTarget[:, d] = ddyDesired[ d ] - self.ay[ d ] * (
-                self.by[d] * (self.goal[ d ] - yDesired[ d ]) - dyDesired[ d ]
+        for d in range(self.n_dmps):
+            f_target[:, d] = ddy_des[d] - self.ay[d] * (
+                self.by[d] * (self.goal[d] - y_des[d]) - dy_des[d]
             )
 
-        # efficiently generate weights to realize fTarget
-        self.genWeights( fTarget )
+        # efficiently generate weights to realize f_target
+        self.gen_weights(f_target)
 
-        if isPlot:
+        if plot is True:
             # plot the basis function activations
+            import matplotlib.pyplot as plt
 
-            plt.figure( )
-            plt.subplot( 211 )
-            psiTrack = self.genPsi( self.cs.rollout( ) )
-            plt.plot( psiTrack )
-            plt.title( "Basis Functions" )
+            plt.figure()
+            plt.subplot(211)
+            psi_track = self.gen_psi(self.cs.rollout())
+            plt.plot(psi_track)
+            plt.title("basis functions")
 
             # plot the desired forcing function vs approx
-            for i in range( self.nDMPs ):
-                plt.subplot( 2, self.nDMPs, self.nDMPs + 1 + i )
-                plt.plot( fTarget[ :, i ], "--", label = "fTarget %i" % i)
-
-            for i in range( self.nDMPs ):
-                plt.subplot( 2, self.nDMPs, self.nDMPs + 1 + i )
-                print( "w shape: ", self.w.shape )
+            for ii in range(self.n_dmps):
+                plt.subplot(2, self.n_dmps, self.n_dmps + 1 + ii)
+                plt.plot(f_target[:, ii], "--", label="f_target %i" % ii)
+            for ii in range(self.n_dmps):
+                plt.subplot(2, self.n_dmps, self.n_dmps + 1 + ii)
+                print("w shape: ", self.w.shape)
                 plt.plot(
-                    np.sum( psiTrack * self.w[ i ], axis = 1) * self.dt,
-                    label = "w*psi %i" % i )
+                    np.sum(psi_track * self.w[ii], axis=1) * self.dt,
+                    label="w*psi %i" % ii,
+                )
                 plt.legend()
             plt.title("DMP forcing function")
             plt.tight_layout()
             plt.show()
 
-        self.resetState()
-        return yDesired
+        self.reset_state()
+        return y_des
 
-    def rollout( self, timesteps = None, **kwargs ):
-        """
-            Generate a system trial, no feedback is incorporated.
-        """
+    def rollout(self, timesteps=None, **kwargs):
+        """Generate a system trial, no feedback is incorporated."""
 
-        self.resetState()
+        self.reset_state()
 
         if timesteps is None:
-            timesteps = int( self.timesteps / kwargs[ "tau" ] ) if "tau" in kwargs else self.timesteps
+            if "tau" in kwargs:
+                timesteps = int(self.timesteps / kwargs["tau"])
+            else:
+                timesteps = self.timesteps
 
         # set up tracking vectors
-        yTrack   = np.zeros( ( timesteps, self.nDMPs ) )
-        dyTrack  = np.zeros( ( timesteps, self.nDMPs ) )
-        ddyTrack = np.zeros( ( timesteps, self.nDMPs ) )
+        y_track = np.zeros((timesteps, self.n_dmps))
+        dy_track = np.zeros((timesteps, self.n_dmps))
+        ddy_track = np.zeros((timesteps, self.n_dmps))
 
         for t in range(timesteps):
 
-            yTrack[t], dyTrack[t], ddyTrack[t] = self.step( **kwargs )            # run and record timestep
+            # run and record timestep
+            y_track[t], dy_track[t], ddy_track[t] = self.step(**kwargs)
 
-        return yTrack, dyTrack, ddyTrack
+        return y_track, dy_track, ddy_track
 
-    def resetState( self ):
-        """
-            Reset the system state
-        """
-        self.y   = self.y0.copy()
-        self.dy  = np.zeros( self.nDMPs )
-        self.ddy = np.zeros( self.nDMPs )
-        self.cs.resetState()
+    def reset_state(self):
+        """Reset the system state"""
+        self.y = self.y0.copy()
+        self.dy = np.zeros(self.n_dmps)
+        self.ddy = np.zeros(self.n_dmps)
+        self.cs.reset_state()
 
-    def step( self, tau = 1.0, error = 0.0, externalForce = None):
-        """
-            Run the DMP system for a single timestep.
+    def step(self, tau=1.0, error=0.0, external_force=None):
+        """Run the DMP system for a single timestep.
 
-            [INPUT]
-                [VAR NAME]    [TYPE]        [DESCRIPTION]
-                tau            float    Scales the timestep increase tau to make the system execute faster
-                error          float    Optional system feedback
+        tau float: scales the timestep
+                   increase tau to make the system execute faster
+        error float: optional system feedback
         """
 
-        errorCoupling = 1.0 / ( 1.0 + error )
+        error_coupling = 1.0 / (1.0 + error)
         # run canonical system
-        x = self.cs.step( tau = tau, errorCoupling = errorCoupling )
+        x = self.cs.step(tau=tau, error_coupling=error_coupling)
 
         # generate basis function activation
-        psi = self.genPsi( x )
+        psi = self.gen_psi(x)
 
-        for d in range( self.nDMPs ):
+        for d in range(self.n_dmps):
 
             # generate the forcing term
-            f = self.genFrontTerm( x, d ) * ( np.dot( psi, self.w[ d ] ) ) / np.sum( psi )
+            f = self.gen_front_term(x, d) * (np.dot(psi, self.w[d])) / np.sum(psi)
 
             # DMP acceleration
-            self.ddy[ d ] = (
-                self.ay[ d ] * (self.by[ d ] * ( self.goal[ d ] - self.y[ d ] ) - self.dy[ d ] ) + f
+            self.ddy[d] = (
+                self.ay[d] * (self.by[d] * (self.goal[d] - self.y[d]) - self.dy[d]) + f
             )
-
-            if externalForce is not None:
-                self.ddy[ d ] += externalForce[ d ]
-
-            self.dy[ d ] += self.ddy[ d ] * tau * self.dt * errorCoupling
-            self.y[ d ]  +=  self.dy[ d ] * tau * self.dt * errorCoupling
+            if external_force is not None:
+                self.ddy[d] += external_force[d]
+            self.dy[d] += self.ddy[d] * tau * self.dt * error_coupling
+            self.y[d] += self.dy[d] * tau * self.dt * error_coupling
 
         return self.y, self.dy, self.ddy

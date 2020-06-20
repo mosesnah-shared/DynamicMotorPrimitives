@@ -15,22 +15,26 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
+sys.path.insert(0, '..')
+
 import pydmps
-import pydmps.dmp_discrete
+import pydmps.DMP_Discrete
 
 y_des = np.load("2.npz")["arr_0"].T
 y_des -= y_des[:, 0][:, None]
 
 # test normal run
-dmp = pydmps.dmp_discrete.DMPs_discrete(n_dmps=2, n_bfs=500, ay=np.ones(2) * 10.0)
+dmp = pydmps.DMP_Discrete(nDMPs=2, nBFs=500, ay=np.ones(2) * 10.0)
 y_track = []
 dy_track = []
 ddy_track = []
 
-dmp.imitate_path(y_des=y_des, plot=False)
+dmp.imitatePath(yDesired=y_des, isPlot=False)
 y_track, dy_track, ddy_track = dmp.rollout()
 plt.figure(1, figsize=(6, 6))
 
