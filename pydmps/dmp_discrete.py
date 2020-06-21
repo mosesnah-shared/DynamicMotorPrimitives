@@ -17,18 +17,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from pydmps.dmp import DMPs
 
-import numpy as np
+import numpy             as np
+import matplotlib.pyplot as plt
 
-
-class DMPs_discrete(DMPs):
-    """An implementation of discrete DMPs"""
+class DMPs_discrete( DMPs ):
+    """
+        An implementation of discrete DMPs
+    """
 
     def __init__(self, **kwargs):
         """
         """
 
         # call super class constructor
-        super(DMPs_discrete, self).__init__(pattern="discrete", **kwargs)
+        super( DMPs_discrete, self ).__init__( pattern = "discrete", **kwargs )
 
         self.gen_centers()
 
@@ -39,8 +41,10 @@ class DMPs_discrete(DMPs):
         self.check_offset()
 
     def gen_centers(self):
-        """Set the centre of the Gaussian basis
-        functions be spaced evenly throughout run time"""
+        """
+            Set the centre of the Gaussian basis functions be spaced evenly throughout run time
+
+        """
 
         """x_track = self.cs.discrete_rollout()
         t = np.arange(len(x_track))*self.dt
@@ -119,7 +123,7 @@ class DMPs_discrete(DMPs):
 # Test code
 # ==============================
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
+
 
     # test normal run
     dmp = DMPs_discrete(dt=0.05, n_dmps=1, n_bfs=10, w=np.zeros((1, 10)))
